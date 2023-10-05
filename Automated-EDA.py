@@ -1,194 +1,194 @@
-# Import necessary libraries
 import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-import plotly.express as px
-from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import LabelEncoder, StandardScaler
+import base64 
 
 # Function to handle missing values for numerical columns
-def handle_numerical_missing(df, selected_column, imputation_method):
-    if imputation_method == "Mean":
-        imputer = SimpleImputer(strategy="mean")
-    elif imputation_method == "Median":
-        imputer = SimpleImputer(strategy="median")
-    elif imputation_method == "Mode":
-        imputer = SimpleImputer(strategy="most_frequent")
-    elif imputation_method == "Custom Value":
-        custom_value = st.number_input("Enter Custom Value for Imputation", value=0.0)
-        imputer = SimpleImputer(strategy="constant", fill_value=custom_value)
-    else:
-        return df
-
-    df[selected_column] = imputer.fit_transform(df[[selected_column]])
+def handle_numerical_missing(df, column, method):
+    if method == "Mean":
+        df[column].fillna(df[column].mean(), inplace=True)
+    elif method == "Median":
+        df[column].fillna(df[column].median(), inplace=True)
+    elif method == "Mode":
+        df[column].fillna(df[column].mode().iloc[0], inplace=True)
+    elif method == "Custom Value":
+        custom_value = st.number_input(f"Enter custom value for {column}", key=f"custom_{column}")
+        df[column].fillna(custom_value, inplace=True)
     return df
 
 # Function to handle missing values for categorical columns
-def handle_categorical_missing(df, selected_column, imputation_method):
-    if imputation_method == "Mode":
-        mode_value = df[selected_column].mode().values[0]
-        df[selected_column].fillna(mode_value, inplace=True)
-    elif imputation_method == "Custom Value":
-        custom_value = st.text_input("Enter Custom Value for Imputation", value="")
-        df[selected_column].fillna(custom_value, inplace=True)
+def handle_categorical_missing(df, column, method):
+    if method == "Mode":
+        df[column].fillna(df[column].mode().iloc[0], inplace=True)
+    elif method == "Custom Value":
+        custom_value = st.text_input(f"Enter custom value for {column}", key=f"custom_{column}")
+        df[column].fillna(custom_value, inplace=True)
     return df
 
 # Function to encode categorical features
-def encode_categorical_features(df, selected_categorical_columns, encode_option):
-    if encode_option == "Label Encoding":
-        for col in selected_categorical_columns:
-            df[col] = df[col].astype("category").cat.codes
-    else:
-        df = pd.get_dummies(df, columns=selected_categorical_columns, drop_first=True)
+def encode_categorical_features(df, columns, method):
+    if method == "Label Encoding":
+        le = LabelEncoder()
+        for column in columns:
+            df[column] = le.fit_transform(df[column])
+    elif method == "One-Hot Encoding":
+        df = pd.get_dummies(df, columns=columns)
     return df
 
 # Function to scale numerical features
-def scale_numerical_features(df, selected_numerical_columns, scaling_method):
-    for col in selected_numerical_columns:
-        if scaling_method == "Standardization (Z-score)":
-            mean = df[col].mean()
-            std = df[col].std()
-            df[col] = (df[col] - mean) / std
-        else:
-            min_val = df[col].min()
-            max_val = df[col].max()
-            df[col] = (df[col] - min_val) / (max_val - min_val)
+def scale_numerical_features(df, columns, method):
+    scaler = StandardScaler()
+    for column in columns:
+        df[column] = scaler.fit_transform(df[[column]])
     return df
 
-# Function to create a download link for cleaned data
+# Function to create a download link for the cleaned data
 def create_download_link(df):
-    # Save the cleaned data to a CSV file
-    cleaned_data_file = "cleaned_data.csv"
-    df.to_csv(cleaned_data_file, index=False)
+    csv = df.to_csv(index=False)
+    b64 = base64.b64encode(csv.encode()).decode()
+    href = f'<a href="data:file/csv;base64,{b64}" download="cleaned_data.csv">Download CSV File</a>'
+    st.markdown(href, unsafe_allow_html=True)
 
-    # Generate a download link for the user
-    st.markdown(f"Download the cleaned data as [**{cleaned_data_file}**](data:{cleaned_data_file})")
+# Function to visualize numerical column distributions
+def visualize_numerical_columns(df, columns):
+    for column in columns:
+        plt.figure(figsize=(6, 4))
+        sns.histplot(df[column], kde=True)
+        plt.title(f'Distribution of {column}')
+        st.pyplot(plt)
 
-    # Provide instructions for the user to download the file
-    st.info("To download the file, right-click the link above and select 'Save Link As'.")
+# Function to visualize categorical column counts
+def visualize_categorical_columns(df, columns):
+    for column in columns:
+        plt.figure(figsize=(6, 4))
+        sns.countplot(data=df, x=column)
+        plt.title(f'Count of {column}')
+        plt.xticks(rotation=45)
+        st.pyplot(plt)
 
-# Define a Streamlit app title
-st.title("Automated EDA Tool")
+# Function to visualize a correlation heatmap
+def visualize_correlation_heatmap(df, columns):
+    correlation_matrix = df[columns].corr()
+    plt.figure(figsize=(8, 6))
+    sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', linewidths=0.5)
+    plt.title("Correlation Heatmap")
+    st.pyplot(plt)
 
-# Create a sidebar for user input
-st.sidebar.header("Upload Data")
+# Main function for EDA
+def explore_data():
+    st.title("Exploratory Data Analysis (EDA) Tool")
+    #st.sidebar.title("Upload Data")
 
-# Add a file uploader to the sidebar
-uploaded_file = st.sidebar.file_uploader("Upload a CSV or Excel file", type=["csv", "xlsx"])
+    uploaded_file = st.sidebar.file_uploader("Upload CSV or Excel file", type=["csv", "xlsx"])
 
-# Check if a file was uploaded
-if uploaded_file is not None:
-    # Display a message about the uploaded file
-    st.sidebar.success(f"Uploaded file: {uploaded_file.name}")
-
-    # Load the data into a Pandas DataFrame
-    try:
-        if uploaded_file.type == "application/vnd.ms-excel":
-            df = pd.read_excel(uploaded_file)
-        else:
-            df = pd.read_csv(uploaded_file)
-        
-        # Display the loaded data in the main content area
-        st.header("Loaded Data")
-        st.write(df)
-
-        # Handle missing values
-        missing_columns = df.columns[df.isnull().any()].tolist()
-        if len(missing_columns) > 0:
-            st.header("Columns with Missing Values")
-            missing_data = df.isnull().sum()
-            st.write(missing_data)
-            selected_column = st.selectbox("Select Column to Handle Missing Values", ["None"] + missing_columns, index=0)
-
-            if selected_column != "None":
-                data_type = df[selected_column].dtype
-
-                if np.issubdtype(data_type, np.number):
-                    st.subheader("Handling Missing Values for Numerical Column")
-                    imputation_method = st.selectbox("Select Imputation Method", ["None", "Mean", "Median", "Mode", "Custom Value"], index=0)
-
-                    if imputation_method != "None":
-                        df = handle_numerical_missing(df, selected_column, imputation_method)
-                else:
-                    st.subheader("Handling Missing Values for Categorical Column")
-                    imputation_method = st.selectbox("Select Imputation Method", ["None", "Mode", "Custom Value"], index=0)
-
-                    if imputation_method != "None":
-                        df = handle_categorical_missing(df, selected_column, imputation_method)
-
-                st.subheader("Data After Handling Missing Values")
-                st.write(df)
+    if uploaded_file:
+        try:
+            if uploaded_file.type == "application/vnd.ms-excel":
+                df = pd.read_excel(uploaded_file)
             else:
-                st.subheader("No Missing Values Found")
+                df = pd.read_csv(uploaded_file)
 
-        # Encode Categorical Features
-        st.subheader("Encode Categorical Features")
-        categorical_columns = df.select_dtypes(include=["object"]).columns.tolist()
+            st.sidebar.success(f"Uploaded file: {uploaded_file.name}")
+
         
-        if len(categorical_columns) > 0:
-            st.subheader("Select Categorical Columns for Encoding")
-            selected_categorical_columns = st.multiselect("Select Columns", categorical_columns)
-
-            if selected_categorical_columns:
-                encode_option = st.selectbox("Select Encoding Method", ["None", "Label Encoding", "One-Hot Encoding"], index=0)
-
-                if encode_option != "None":
-                    df = encode_categorical_features(df, selected_categorical_columns, encode_option)
-                    st.subheader("Data After Encoding")
-                    st.write(df)
-        
-        # Scale Numerical Features
-        st.subheader("Scale Numerical Features")
-        numerical_columns = df.select_dtypes(include=["number"]).columns.tolist()
-        
-        if len(numerical_columns) > 0:
-            st.subheader("Select Numerical Columns for Scaling")
-            selected_numerical_columns = st.multiselect("Select Columns", numerical_columns)
-
-            if selected_numerical_columns:
-                scaling_method = st.selectbox("Select Scaling Method", ["None", "Standardization (Z-score)", "Min-Max Scaling"], index=0)
-
-                if scaling_method != "None":
-                    df = scale_numerical_features(df, selected_numerical_columns, scaling_method)
-                    st.subheader("Data After Scaling")
-                    st.write(df)
-        
-        # Create a download link to save the cleaned data
-        if st.button("Download Cleaned Data"):
-            create_download_link(df)
-        
-        # Visualization section
-        if st.checkbox("Visualize Data"):
-            st.subheader("Data Visualization")
-
-            # Choose visualization options
-            visualization_options = st.multiselect(
-                "Select Visualization Options",
-                ["Numerical Column Visualization", "Categorical Column Visualization", "Correlation Heatmap", "Pair Plots"]
+           # Data Operations: Drop Columns and Rename Columns
+            st.sidebar.subheader("Data Operations")
+            data_operations = st.sidebar.multiselect(
+                "Select data operations",
+                ["Handle Missing Values", "Drop Columns", "Rename Columns"]
             )
 
-            # Check if date columns exist and add handling option if needed
-            date_columns = df.select_dtypes(include=["datetime64"]).columns.tolist()
-            if date_columns:
-                date_handling_option = st.selectbox(
-                    "Select Date Handling Option",
-                    ["None", "Parse Dates"],
-                    index=0
-                )
-                if date_handling_option == "Parse Dates":
-                    date_columns_to_parse = st.multiselect(
-                        "Select Date Columns to Parse",
-                        date_columns
-                    )
-                    if date_columns_to_parse:
-                        df[date_columns_to_parse] = df[date_columns_to_parse].apply(pd.to_datetime)
+            if "Handle Missing Values" in data_operations:
+                st.sidebar.subheader("Handle Missing Values")
+                missing_columns = df.columns[df.isnull().any()].tolist()
+                
+                if missing_columns:
+                    st.subheader("Missing Value Handling")
+                    # Separate numerical and categorical columns
+                    numerical_columns = df.select_dtypes(include=np.number).columns.tolist()
+                    categorical_columns = df.select_dtypes(include="object").columns.tolist()
 
-            # ... (rest of the code remains the same)
+                    # Allow the user to choose columns from dropdown lists
+                    numerical_columns_to_handle = st.multiselect("Select Numerical Columns to Handle", numerical_columns)
+                    categorical_columns_to_handle = st.multiselect("Select Categorical Columns to Handle", categorical_columns)
 
-    except pd.errors.EmptyDataError:
-        st.sidebar.error("Uploaded file is empty.")
-    except Exception as e:
-        st.sidebar.error(f"Error loading or processing data: {str(e)}")
-else:
-    st.sidebar.info("Please upload a CSV or Excel file.")
+                    # Handle missing values for numerical columns
+                    if numerical_columns_to_handle:
+                        numerical_imputation_method = st.selectbox("Select imputation method for numerical columns",
+                                                                ["None", "Mean", "Median", "Mode", "Custom Value"])
+                        if numerical_imputation_method != "None":
+                            df = handle_numerical_missing(df, numerical_columns_to_handle, numerical_imputation_method)
+
+                    # Handle missing values for categorical columns
+                    if categorical_columns_to_handle:
+                        categorical_imputation_method = st.selectbox("Select imputation method for categorical columns",
+                                                                    ["None", "Mode", "Custom Value"])
+                        if categorical_imputation_method != "None":
+                            df = handle_categorical_missing(df, categorical_columns_to_handle, categorical_imputation_method)
+
+                    st.success("Missing values handled successfully.")
+
+            
+            if "Drop Columns" in data_operations:
+                st.subheader("Drop Columns")
+                columns_to_drop = st.multiselect("Select columns to drop", df.columns.tolist())
+                if columns_to_drop:
+                    df = df.drop(columns=columns_to_drop)
+                    st.success("Columns dropped successfully.")
+
+            # Rename Columns
+            if "Rename Columns" in data_operations:
+                st.subheader("Rename Columns")
+                columns_to_rename = st.multiselect("Select columns to rename", df.columns.tolist())
+                
+                if columns_to_rename:
+                    rename_mapping = {}
+                    for column in columns_to_rename:
+                        new_name = st.text_input(f"Enter new name for '{column}'", key=f"rename_{column}")
+                        if new_name:
+                            rename_mapping[column] = new_name
+                    
+                    if rename_mapping:
+                        df = df.rename(columns=rename_mapping)
+                        st.success("Columns renamed successfully.")
+
+
+            # Download Cleaned Data
+            if st.sidebar.button("Download Cleaned Data"):
+                create_download_link(df)
+
+            st.header("Data Overview")
+            st.dataframe(df)
+
+            st.sidebar.subheader("Data Visualization")
+
+            # Visualization Options
+            visualization_options = st.sidebar.multiselect("Select Visualization Options",
+                                                           ["Numerical Column Distributions",
+                                                            "Categorical Column Counts",
+                                                            "Correlation Heatmap"])
+            if "Numerical Column Distributions" in visualization_options:
+                st.subheader("Numerical Column Distributions")
+                visualize_numerical_columns(df, df.select_dtypes(include=np.number).columns.tolist())
+
+            if "Categorical Column Counts" in visualization_options:
+                st.subheader("Categorical Column Counts")
+                visualize_categorical_columns(df, df.select_dtypes(include="object").columns.tolist())
+
+            if "Correlation Heatmap" in visualization_options:
+                st.subheader("Correlation Heatmap")
+                visualize_correlation_heatmap(df, df.select_dtypes(include=np.number).columns.tolist())
+
+        except pd.errors.EmptyDataError:
+            st.sidebar.error("Uploaded file is empty.")
+        except Exception as e:
+            st.sidebar.error(f"Error loading or processing data: {str(e)}")
+    else:
+        st.sidebar.info("Please upload a CSV or Excel file.")
+
+
+if __name__ == "__main__":
+    explore_data()
