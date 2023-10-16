@@ -79,7 +79,7 @@ def visualize_correlation_heatmap(df, columns):
 
 # Main function for EDA
 def explore_data():
-    st.title("Exploratory Data Analysis (EDA) Tool")
+    st.title("Automated Exploratory Data Analysis Tool")
     #st.sidebar.title("Upload Data")
 
     uploaded_file = st.sidebar.file_uploader("Upload CSV or Excel file", type=["csv", "xlsx"])
